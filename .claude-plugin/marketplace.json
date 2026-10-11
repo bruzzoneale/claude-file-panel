@@ -1,0 +1,6 @@
+{
+  "name": "file-panel",
+  "description": "Sidebar pane for Claude Code that collects file reads and edits with their diffs",
+  "owner": { "name": "Alessandro Bruzzone" },
+  "plugins": [{ "name": "file-panel", "source": "./" }]
+}
