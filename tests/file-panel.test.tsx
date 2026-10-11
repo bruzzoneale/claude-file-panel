@@ -135,6 +135,34 @@ describe('file-panel', () => {
       expect(drawn).toEqual({ stdout: 'done', stderr: '', interrupted: false })
     })
 
+    test(`${surface}: the transcript keeps an Edit row in full while the pane waits undrawn`, async ($, on) => {
+      on('ui.open', () => ({ value: { isPlaced: false, reason: 'terminal 100 columns, pane needs 110' } }))
+      on('ui.render', { component: 'ToolUse' }, ($e, e) => {
+        const { Text } = $e.ui.resolve(e)
+
+        return <Text>engine row</Text>
+      })
+      await $.command.run({ command: 'file-panel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 100 } })
+
+      const row = await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'ToolUse',
+        requestId: 'toolu_6',
+        props: {
+          tool_use_id: 'toolu_6',
+          tool: 'Edit',
+          input: { file_path: 'D:/proj/Unit6.pas', old_string: 'a', new_string: 'b' },
+          isRunning: false,
+          isErrored: false,
+          isInterrupted: false,
+        },
+      })
+
+      expect(await row.find({ type: 'Text', text: /File pane/ })).toBeUndefined()
+      expect(await row.find({ type: 'Text', text: 'engine row' })).toBeDefined()
+    })
+
     test(`${surface}: a Bash row is left to the engine`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: true } }))
       on('ui.render', { component: 'ToolUse' }, ($e, e) => {

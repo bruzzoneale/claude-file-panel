@@ -122,14 +122,16 @@ export const register: Register = on => {
       name: 'file-panel',
       description: 'Open the side pane with file reads and edits',
     })
-    void $.ui.open({ id: PANE, title: TITLE }).then(() => update($, isOpen, () => true))
+    // Opened unasked on a narrow terminal the pane waits undrawn: the transcript then keeps showing
+    // everything, so no diff is hidden with nowhere to see it.
+    void $.ui.open({ id: PANE, title: TITLE }).then(opened => update($, isOpen, () => opened.isPlaced))
 
     return next(e)
   })
 
   on('command.run', { command: 'file-panel' }, async $ => {
-    await $.ui.open({ id: PANE, title: TITLE })
-    await update($, isOpen, () => true)
+    const opened = await $.ui.open({ id: PANE, title: TITLE })
+    await update($, isOpen, () => opened.isPlaced)
 
     return { text: 'File pane opened.' }
   })
@@ -142,13 +144,19 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // Once next(e) has run the tool, every failure of the pane's bookkeeping stays in here: the .catch below
+  // would call next(e) again and run the tool a second time.
   on('tool.call', async ($, e, next) => {
     if (e.tool === 'Bash') {
       const ran = await next(e)
-      const diff = bashEditDiffOf(ran.result)
-      if (diff !== undefined) {
-        const found = bashEntriesOf(e.tool_use_id, diff)
-        await update($, entries, list => [...list, ...found].slice(-MAX_ENTRIES))
+      try {
+        const diff = bashEditDiffOf(ran.result)
+        if (diff !== undefined) {
+          const found = bashEntriesOf(e.tool_use_id, diff)
+          await update($, entries, list => [...list, ...found].slice(-MAX_ENTRIES))
+        }
+      } catch {
+        // The pane misses this command's files; the command itself already ran.
       }
 
       return ran
@@ -161,15 +169,19 @@ export const register: Register = on => {
     await update($, entries, list => [...list, entry].slice(-MAX_ENTRIES))
 
     const ran = await next(e)
-    const isFailed = (ran.deny !== undefined) || (ran.isError === true)
-    const details = isFailed
-      ? { note: ran.deny ?? ran.text ?? 'error' }
-      : summaryOf(e.tool, ran.result)
+    try {
+      const isFailed = (ran.deny !== undefined) || (ran.isError === true)
+      const details = isFailed
+        ? { note: ran.deny ?? ran.text ?? 'error' }
+        : summaryOf(e.tool, ran.result)
 
-    const status: FileEntryStatus = isFailed ? 'error' : 'done'
-    await update($, entries, list =>
-      list.map(one => (one.id === entry.id ? { ...one, ...details, status } : one)),
-    )
+      const status: FileEntryStatus = isFailed ? 'error' : 'done'
+      await update($, entries, list =>
+        list.map(one => (one.id === entry.id ? { ...one, ...details, status } : one)),
+      )
+    } catch {
+      // The entry stays 'running'; the tool itself already ran.
+    }
 
     return ran
   }).catch(($, e, next) => next(e))
