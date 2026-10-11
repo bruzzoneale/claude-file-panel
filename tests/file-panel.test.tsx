@@ -72,6 +72,69 @@ describe('file-panel', () => {
       expect(await row.find({ type: 'Text', text: /Edit Unit2\.pas .*File pane/ })).toBeDefined()
     })
 
+    test(`${surface}: files a Bash command changed land in the pane`, async ($, on) => {
+      on('tool.call', { tool: 'Bash' }, async () => ({
+        result: {
+          stdout: 'done',
+          stderr: '',
+          interrupted: false,
+          bashEditDiff: { files: [{ filePath: 'D:/proj/notes.md', hunks: PATCH }], moreFiles: 0 },
+        },
+      }))
+
+      await $.tool.call({ tool: 'Bash', tool_use_id: 'toolu_4', command: 'python edit.py' })
+
+      const pane = await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'Pane',
+        requestId: 'file-panel',
+        props: {
+          title: 'File',
+          isFocused: false,
+          bodyColumns: 60,
+          placement: 'dock',
+          scroll: { offset: 0, bodyRows: 40 },
+          view: {},
+        },
+      })
+
+      expect(await pane.find({ type: 'Text', text: 'notes.md' })).toBeDefined()
+      expect(await pane.find({ type: 'Code', text: '+new line' })).toBeDefined()
+    })
+
+    test(`${surface}: a Bash result drops its file diffs once the pane is open`, async ($, on) => {
+      let drawn: unknown
+      on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.render', { component: 'ToolResult' }, ($e, e) => {
+        drawn = e.props.output
+        const { Text } = $e.ui.resolve(e)
+
+        return <Text>engine result</Text>
+      })
+      await $.command.run({ command: 'file-panel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+
+      await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'ToolResult',
+        requestId: 'toolu_5',
+        props: {
+          tool_use_id: 'toolu_5',
+          tool: 'Bash',
+          output: {
+            stdout: 'done',
+            stderr: '',
+            interrupted: false,
+            bashEditDiff: { files: [{ filePath: 'D:/proj/notes.md', hunks: PATCH }], moreFiles: 0 },
+          },
+          isErrored: false,
+        },
+      })
+
+      expect(drawn).toEqual({ stdout: 'done', stderr: '', interrupted: false })
+    })
+
     test(`${surface}: a Bash row is left to the engine`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: true } }))
       on('ui.render', { component: 'ToolUse' }, ($e, e) => {

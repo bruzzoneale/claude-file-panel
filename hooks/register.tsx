@@ -30,7 +30,10 @@ function baseName(path: string): string {
 
 // Whole hunks only, so the Code element still parses the text as a unified diff.
 function diffOf(result: unknown): Pick<FileEntry, 'diff' | 'added' | 'removed' | 'note'> {
-  const patch = (result as { structuredPatch?: Hunk[] } | undefined)?.structuredPatch
+  return hunksOf((result as { structuredPatch?: Hunk[] } | undefined)?.structuredPatch)
+}
+
+function hunksOf(patch: Hunk[] | undefined): Pick<FileEntry, 'diff' | 'added' | 'removed' | 'note'> {
   if (!Array.isArray(patch) || patch.length === 0) {
     return {}
   }
@@ -80,6 +83,39 @@ function summaryOf(tool: string, result: unknown): Pick<FileEntry, 'diff' | 'add
   return {}
 }
 
+type BashEditDiff = {
+  files: { filePath: string; hunks: Hunk[]; created?: true; deleted?: true }[]
+  moreFiles: number
+}
+
+function bashEditDiffOf(result: unknown): BashEditDiff | undefined {
+  const diff = (result as { bashEditDiff?: BashEditDiff } | undefined)?.bashEditDiff
+
+  return Array.isArray(diff?.files) && diff.files.length > 0 ? diff : undefined
+}
+
+// One entry per file a shell command changed, from the diff the engine attaches to Bash results.
+function bashEntriesOf(toolUseId: string, diff: BashEditDiff): FileEntry[] {
+  const found: FileEntry[] = diff.files.map((file, index) => {
+    const details = hunksOf(file.hunks)
+    const change = file.created ? 'new file' : (file.deleted ? 'deleted' : undefined)
+    const note = [change, details.note].filter(Boolean).join(', ') || undefined
+
+    return { id: `${toolUseId}#${index}`, tool: 'Bash', path: file.filePath, status: 'done', ...details, note }
+  })
+  if (diff.moreFiles > 0) {
+    found.push({
+      id: `${toolUseId}#more`,
+      tool: 'Bash',
+      path: '',
+      status: 'done',
+      note: `… ${diff.moreFiles} more file${diff.moreFiles === 1 ? '' : 's'} changed, not shown`,
+    })
+  }
+
+  return found
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -107,6 +143,16 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('tool.call', async ($, e, next) => {
+    if (e.tool === 'Bash') {
+      const ran = await next(e)
+      const diff = bashEditDiffOf(ran.result)
+      if (diff !== undefined) {
+        const found = bashEntriesOf(e.tool_use_id, diff)
+        await update($, entries, list => [...list, ...found].slice(-MAX_ENTRIES))
+      }
+
+      return ran
+    }
     if (!FILE_TOOLS.has(e.tool)) {
       return next(e)
     }
@@ -145,6 +191,12 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
+    // A shell command's output stays; only the file diffs it carries move to the pane.
+    if (e.props.tool === 'Bash' && bashEditDiffOf(e.props.output) !== undefined && (await read($, isOpen))) {
+      const { bashEditDiff: _moved, ...output } = e.props.output as { bashEditDiff?: unknown }
+
+      return next({ ...e, props: { ...e.props, output } })
+    }
     if (!FILE_TOOLS.has(e.props.tool) || !(await read($, isOpen))) {
       return next(e)
     }

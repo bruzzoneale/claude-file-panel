@@ -9,7 +9,8 @@ conversation, reasoning and prompts.
   show the coloured diff and the +/- line counts; errors are shown in red. The "Clear" button
   empties the list.
 - **Transcript**: a file tool's row shrinks to one dim line (`✓ Edit Unit1.pas  → File pane`).
-  Bash commands are left as they are.
+  Bash commands keep their output; the files a command changes (a script, `sed`, ...) go to the pane
+  with their diff.
 - **Pane closed** (Esc or `ctrl+x x`): the transcript shows everything in full again.
 - **`/file-panel`** reopens the pane.
 

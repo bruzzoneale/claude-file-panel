@@ -9,7 +9,8 @@ transcript principale a conversazione, ragionamenti e prompt.
   alto. Edit e Write mostrano il diff colorato e il conteggio delle righe +/-, gli errori sono in rosso.
   Il pulsante "Clear" azzera l'elenco.
 - **Transcript**: la riga di un tool sui file diventa una riga grigia (`✓ Edit Unit1.pas  → File pane`).
-  I comandi Bash restano come sono.
+  I comandi Bash mantengono il loro output; i file modificati da un comando (uno script, `sed`, ...)
+  vanno nel pannello con il loro diff.
 - **Pannello chiuso** (Esc o `ctrl+x x`): il transcript torna a mostrare tutto per intero.
 - **`/file-panel`** riapre il pannello.
 
