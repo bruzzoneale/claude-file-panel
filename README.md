@@ -10,7 +10,7 @@ conversation, reasoning and prompts.
   empties the list.
 - **Transcript**: a file tool's row shrinks to one dim line (`✓ Edit Unit1.pas  → File pane`).
   Bash commands keep their output; the files a command changes (a script, `sed`, ...) go to the pane
-  with their diff.
+  with their diff, also in another git worktree of the repository when the command names its path.
 - **Pane closed** (Esc or `ctrl+x x`): the transcript shows everything in full again.
 - **`/file-panel`** reopens the pane.
 

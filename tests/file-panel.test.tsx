@@ -103,6 +103,56 @@ describe('file-panel', () => {
       expect(await pane.find({ type: 'Code', text: '+new line' })).toBeDefined()
     })
 
+    test(`${surface}: a Bash command in another worktree lands in the pane through git`, async ($, on) => {
+      const ran = (stdout: string, exitCode = 0) => ({
+        value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+      })
+      let isAfter = false
+      on('session.cwd', () => ({ value: 'D:/repo/main' }))
+      on('process.run', (_$, e) => {
+        const args = e.argv.join(' ')
+        if (args.includes('worktree list')) {
+          return ran('worktree D:/repo/main\nHEAD 1\n\nworktree D:/repo/wt\nHEAD 2\n')
+        }
+        if (args.includes('stash create')) {
+          return ran('abc123\n')
+        }
+        if (args.includes('ls-files')) {
+          return ran('')
+        }
+        if (args.includes('diff') && args.includes('abc123')) {
+          return ran(isAfter ? 'diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-b\n+B\n' : '')
+        }
+
+        return ran('', 1)
+      })
+      on('tool.call', { tool: 'Bash' }, async () => {
+        isAfter = true
+
+        return { result: { stdout: '', stderr: '', interrupted: false } }
+      })
+
+      await $.tool.call({ tool: 'Bash', tool_use_id: 'toolu_7', command: "sed -i 's/b/B/' ../wt/f.txt" })
+
+      const pane = await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'Pane',
+        requestId: 'file-panel',
+        props: {
+          title: 'File',
+          isFocused: false,
+          bodyColumns: 60,
+          placement: 'dock',
+          scroll: { offset: 0, bodyRows: 40 },
+          view: {},
+        },
+      })
+
+      expect(await pane.find({ type: 'Text', text: 'D:/repo/wt/f.txt' })).toBeDefined()
+      expect(await pane.find({ type: 'Code', text: '+B' })).toBeDefined()
+    })
+
     test(`${surface}: a Bash result drops its file diffs once the pane is open`, async ($, on) => {
       let drawn: unknown
       on('ui.open', () => ({ value: { isPlaced: true } }))

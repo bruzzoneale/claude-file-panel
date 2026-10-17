@@ -10,7 +10,8 @@ transcript principale a conversazione, ragionamenti e prompt.
   Il pulsante "Clear" azzera l'elenco.
 - **Transcript**: la riga di un tool sui file diventa una riga grigia (`✓ Edit Unit1.pas  → File pane`).
   I comandi Bash mantengono il loro output; i file modificati da un comando (uno script, `sed`, ...)
-  vanno nel pannello con il loro diff.
+  vanno nel pannello con il loro diff, anche in un'altra worktree git del repository quando il comando
+  ne nomina il percorso.
 - **Pannello chiuso** (Esc o `ctrl+x x`): il transcript torna a mostrare tutto per intero.
 - **`/file-panel`** riapre il pannello.
 

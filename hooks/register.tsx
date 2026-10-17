@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { FileEntry, FileEntryStatus } from '../types'
+import { changesSince, snapshotNamedWorktrees } from './worktree-diff'
+import type { ChangedFile, Hunk } from './worktree-diff'
 
 const PANE = 'file-panel'
 const TITLE = 'File'
@@ -12,8 +14,6 @@ const MAX_DIFF_LINES = 80
 
 const entries = atom({ plugin: 'file-panel', key: 'entries' } as const, [])
 const isOpen = atom({ plugin: 'file-panel', key: 'isOpen' } as const, false)
-
-type Hunk = { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }
 
 function targetOf(input: unknown): string {
   const fields = (input ?? {}) as Record<string, unknown>
@@ -84,7 +84,7 @@ function summaryOf(tool: string, result: unknown): Pick<FileEntry, 'diff' | 'add
 }
 
 type BashEditDiff = {
-  files: { filePath: string; hunks: Hunk[]; created?: true; deleted?: true }[]
+  files: ChangedFile[]
   moreFiles: number
 }
 
@@ -148,9 +148,17 @@ export const register: Register = on => {
   // would call next(e) again and run the tool a second time.
   on('tool.call', async ($, e, next) => {
     if (e.tool === 'Bash') {
+      const snapshots = await snapshotNamedWorktrees($, e.command).catch(() => [])
       const ran = await next(e)
       try {
-        const diff = bashEditDiffOf(ran.result)
+        const own = bashEditDiffOf(ran.result)
+        const other = snapshots.length > 0 ? await changesSince($, snapshots) : { files: [], moreFiles: 0 }
+        const diff = bashEditDiffOf({
+          bashEditDiff: {
+            files: [...(own?.files ?? []), ...other.files],
+            moreFiles: (own?.moreFiles ?? 0) + other.moreFiles,
+          },
+        })
         if (diff !== undefined) {
           const found = bashEntriesOf(e.tool_use_id, diff)
           await update($, entries, list => [...list, ...found].slice(-MAX_ENTRIES))
