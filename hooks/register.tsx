@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { FileEntry, FileEntryStatus } from '../types'
 import { changesSince, snapshotNamedWorktrees } from './worktree-diff'
@@ -116,22 +116,30 @@ function bashEntriesOf(toolUseId: string, diff: BashEditDiff): FileEntry[] {
   return found
 }
 
+// Open is not enough: opened unasked on a narrow terminal the pane waits undrawn until the terminal widens,
+// and meanwhile the transcript keeps every row in full. Reading isOpen redraws the rows on open and close.
+async function isShown($: EngineInterface): Promise<boolean> {
+  if (!(await read($, isOpen))) {
+    return false
+  }
+
+  return (await $.ui.panes()).some(pane => pane.id === PANE && pane.isPlaced)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'file-panel',
       description: 'Open the side pane with file reads and edits',
     })
-    // Opened unasked on a narrow terminal the pane waits undrawn: the transcript then keeps showing
-    // everything, so no diff is hidden with nowhere to see it.
-    void $.ui.open({ id: PANE, title: TITLE }).then(opened => update($, isOpen, () => opened.isPlaced))
+    void $.ui.open({ id: PANE, title: TITLE }).then(() => update($, isOpen, () => true))
 
     return next(e)
   })
 
   on('command.run', { command: 'file-panel' }, async $ => {
-    const opened = await $.ui.open({ id: PANE, title: TITLE })
-    await update($, isOpen, () => opened.isPlaced)
+    await $.ui.open({ id: PANE, title: TITLE })
+    await update($, isOpen, () => true)
 
     return { text: 'File pane opened.' }
   })
@@ -196,7 +204,7 @@ export const register: Register = on => {
 
   // Transcript: file tool rows shrink to one dim line while the pane is open.
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
-    if (!FILE_TOOLS.has(e.props.tool) || !(await read($, isOpen))) {
+    if (!FILE_TOOLS.has(e.props.tool) || !(await isShown($))) {
       return next(e)
     }
 
@@ -212,12 +220,12 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
     // A shell command's output stays; only the file diffs it carries move to the pane.
-    if (e.props.tool === 'Bash' && bashEditDiffOf(e.props.output) !== undefined && (await read($, isOpen))) {
+    if (e.props.tool === 'Bash' && bashEditDiffOf(e.props.output) !== undefined && (await isShown($))) {
       const { bashEditDiff: _moved, ...output } = e.props.output as { bashEditDiff?: unknown }
 
       return next({ ...e, props: { ...e.props, output } })
     }
-    if (!FILE_TOOLS.has(e.props.tool) || !(await read($, isOpen))) {
+    if (!FILE_TOOLS.has(e.props.tool) || !(await isShown($))) {
       return next(e)
     }
 
@@ -228,7 +236,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => {
     const isAllFiles = e.props.calls.every(call => FILE_TOOLS.has(call.tool))
-    if (!isAllFiles || e.props.isExpanded || !(await read($, isOpen))) {
+    if (!isAllFiles || e.props.isExpanded || !(await isShown($))) {
       return next(e)
     }
 

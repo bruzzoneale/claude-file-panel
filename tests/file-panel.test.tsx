@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 const SURFACES = ['terminal', 'desktop'] as const
+const pane = (isPlaced: boolean) => ({ id: 'file-panel', title: 'File', isShown: true, isFocused: false, isPlaced })
 const PATCH = [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-old line', '+new line'] }]
 
 describe('file-panel', () => {
@@ -47,6 +48,7 @@ describe('file-panel', () => {
 
     test(`${surface}: the transcript row of an Edit shrinks once the pane is open`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.panes', () => ({ value: [pane(true)] }))
       on('ui.render', { component: 'ToolUse' }, ($e, e) => {
         const { Text } = $e.ui.resolve(e)
 
@@ -156,6 +158,7 @@ describe('file-panel', () => {
     test(`${surface}: a Bash result drops its file diffs once the pane is open`, async ($, on) => {
       let drawn: unknown
       on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.panes', () => ({ value: [pane(true)] }))
       on('ui.render', { component: 'ToolResult' }, ($e, e) => {
         drawn = e.props.output
         const { Text } = $e.ui.resolve(e)
@@ -187,6 +190,7 @@ describe('file-panel', () => {
 
     test(`${surface}: the transcript keeps an Edit row in full while the pane waits undrawn`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: false, reason: 'terminal 100 columns, pane needs 110' } }))
+      on('ui.panes', () => ({ value: [pane(false)] }))
       on('ui.render', { component: 'ToolUse' }, ($e, e) => {
         const { Text } = $e.ui.resolve(e)
 
@@ -213,8 +217,39 @@ describe('file-panel', () => {
       expect(await row.find({ type: 'Text', text: 'engine row' })).toBeDefined()
     })
 
+    test(`${surface}: the transcript row of an Edit shrinks once a waiting pane gets placed`, async ($, on) => {
+      let isPlaced = false
+      on('ui.open', () => ({ value: { isPlaced: false, reason: 'terminal 100 columns, pane needs 144' } }))
+      on('ui.panes', () => ({ value: [pane(isPlaced)] }))
+      on('ui.render', { component: 'ToolUse' }, ($e, e) => {
+        const { Text } = $e.ui.resolve(e)
+
+        return <Text>engine row</Text>
+      })
+      await $.command.run({ command: 'file-panel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 100 } })
+      isPlaced = true
+
+      const row = await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'ToolUse',
+        requestId: 'toolu_8',
+        props: {
+          tool_use_id: 'toolu_8',
+          tool: 'Edit',
+          input: { file_path: 'D:/proj/Unit8.pas', old_string: 'a', new_string: 'b' },
+          isRunning: false,
+          isErrored: false,
+          isInterrupted: false,
+        },
+      })
+
+      expect(await row.find({ type: 'Text', text: /Edit Unit8\.pas .*File pane/ })).toBeDefined()
+    })
+
     test(`${surface}: a Bash row is left to the engine`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.panes', () => ({ value: [pane(true)] }))
       on('ui.render', { component: 'ToolUse' }, ($e, e) => {
         const { Text } = $e.ui.resolve(e)
 
