@@ -1,6 +1,6 @@
 {
   "name": "file-panel",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Moves file reads and edits (with diffs) into a sidebar pane, keeping the transcript for conversation",
   "author": { "name": "Alessandro Bruzzone" },
   "types": "./types/index.d.ts"

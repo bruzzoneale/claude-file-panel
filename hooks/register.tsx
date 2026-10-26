@@ -118,12 +118,18 @@ function bashEntriesOf(toolUseId: string, diff: BashEditDiff): FileEntry[] {
 
 // Open is not enough: opened unasked on a narrow terminal the pane waits undrawn until the terminal widens,
 // and meanwhile the transcript keeps every row in full. Reading isOpen redraws the rows on open and close.
+// A failed $.ui.panes() would make the render hook throw and the engine draw the row in full, so it falls
+// back to isOpen.
 async function isShown($: EngineInterface): Promise<boolean> {
   if (!(await read($, isOpen))) {
     return false
   }
 
-  return (await $.ui.panes()).some(pane => pane.id === PANE && pane.isPlaced)
+  try {
+    return (await $.ui.panes()).some(pane => pane.id === PANE && pane.isPlaced)
+  } catch {
+    return true
+  }
 }
 
 export const register: Register = on => {

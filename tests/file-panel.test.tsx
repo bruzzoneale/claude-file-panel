@@ -247,6 +247,36 @@ describe('file-panel', () => {
       expect(await row.find({ type: 'Text', text: /Edit Unit8\.pas .*File pane/ })).toBeDefined()
     })
 
+    test(`${surface}: the transcript row of an Edit still shrinks when the pane list cannot be read`, async ($, on) => {
+      on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.panes', () => {
+        throw new Error('pane list unavailable')
+      })
+      on('ui.render', { component: 'ToolUse' }, ($e, e) => {
+        const { Text } = $e.ui.resolve(e)
+
+        return <Text>engine row</Text>
+      })
+      await $.command.run({ command: 'file-panel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+
+      const row = await $.ui.mount({
+        plugin: 'file-panel',
+        surface,
+        component: 'ToolUse',
+        requestId: 'toolu_9',
+        props: {
+          tool_use_id: 'toolu_9',
+          tool: 'Edit',
+          input: { file_path: 'D:/proj/Unit9.pas', old_string: 'a', new_string: 'b' },
+          isRunning: false,
+          isErrored: false,
+          isInterrupted: false,
+        },
+      })
+
+      expect(await row.find({ type: 'Text', text: /Edit Unit9\.pas .*File pane/ })).toBeDefined()
+    })
+
     test(`${surface}: a Bash row is left to the engine`, async ($, on) => {
       on('ui.open', () => ({ value: { isPlaced: true } }))
       on('ui.panes', () => ({ value: [pane(true)] }))
